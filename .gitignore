@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+venv/
+generated_post_*.json
+batch_report_*.json
