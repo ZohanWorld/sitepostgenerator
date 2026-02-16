@@ -47,7 +47,7 @@ SITE_CONFIGS = {
         'env_service_key': 'HR_SUPABASE_SERVICE_ROLE_KEY',
         'env_site_url': 'HR_SITE_URL',
         'env_revalidate_secret': 'HR_REVALIDATE_SECRET',
-        'default_author': 'Rabotaify',
+        'default_author': None,  # Will be auto-selected from HR_AUTHORS
         'allowed_categories': [
             'IT и карьера', 'Зарплаты', 'Поиск работы', 'Собеседования',
             'Удалённая работа', 'Образование', 'Фриланс', 'Soft skills',
@@ -87,6 +87,34 @@ HR_CATEGORY_ICONS = {
     'Дизайн': '🎨',
     'Менеджмент': '📋',
 }
+
+# Вымышленные авторы для Rabotaify
+HR_AUTHORS = [
+    {
+        'name': 'Иван Маслаков',
+        'role': 'IT-рекрутер',
+        'categories': ['Собеседования', 'Поиск работы'],
+    },
+    {
+        'name': 'Анна Ковалёва',
+        'role': 'Карьерный консультант',
+        'categories': ['Зарплаты', 'Soft skills', 'Менеджмент', 'Удалённая работа', 'Фриланс'],
+    },
+    {
+        'name': 'Дмитрий Соколов',
+        'role': 'Разработчик',
+        'categories': ['Программирование', 'Data Science', 'DevOps', 'Дизайн', 'Образование'],
+    },
+]
+
+def select_hr_author(category=None):
+    """Выбирает автора для HR статьи по категории (или случайно)"""
+    if category:
+        for author in HR_AUTHORS:
+            if category in author['categories']:
+                return author
+    # IT и карьера или неизвестная категория — случайный автор
+    return random.choice(HR_AUTHORS)
 
 def create_category_slug(category_name):
     """Создаёт slug категории из её названия"""
@@ -208,7 +236,7 @@ def save_post_to_database(post_data, selected_title, env_vars=None, site_config=
         mapping.get('content', 'content'): post_data.get('content', ''),
         mapping.get('category', 'category'): post_data.get('category', ''),
         mapping.get('tags', 'tags'): post_data.get('tags', []),
-        mapping.get('author', 'author'): post_data.get('author', site_config['default_author']),
+        mapping.get('author', 'author'): post_data.get('author', site_config['default_author']) or random.choice(HR_AUTHORS)['name'],
         "published_at": now,
         "updated_at": now,
         "is_published": True,
@@ -491,7 +519,7 @@ def get_gpt_prompt_mfo(selected_title):
 """
 
 
-def get_gpt_prompt_hr(selected_title):
+def get_gpt_prompt_hr(selected_title, author_name='Иван Маслаков'):
     """GPT промпт для Rabotaify (HR, IT, карьера)"""
     current_year = 2026
     categories_str = ' | '.join(SITE_CONFIGS['hr']['allowed_categories'])
@@ -512,7 +540,7 @@ def get_gpt_prompt_hr(selected_title):
   "content": "ПОЛНЫЙ текст статьи в формате Markdown (минимум 2500 слов, см. требования ниже)",
   "category": "СТРОГО одна из: {categories_str}",
   "tags": ["тег1", "тег2", "тег3", "тег4", "тег5"],
-  "author": "Rabotaify",
+  "author": "{author_name}",
   "read_time": число_минут_чтения
 }}
 
@@ -546,6 +574,18 @@ def get_gpt_prompt_hr(selected_title):
 - Используй синонимы и LSI-фразы для IT-тематики
 - В первом абзаце обязательно должно быть основное ключевое слово
 
+### Внутренние ссылки (ОБЯЗАТЕЛЬНО):
+- В тексте статьи ОБЯЗАТЕЛЬНО вставь 2-3 ссылки на другие разделы rabotaify.ru
+- Используй markdown-формат: [текст ссылки](URL)
+- Доступные страницы для ссылок:
+  - [вакансии в IT](https://rabotaify.ru/jobs) — каталог вакансий
+  - [IT-компании](https://rabotaify.ru/companies) — каталог компаний-работодателей
+  - [блог о карьере](https://rabotaify.ru/blog) — все статьи блога
+- Ссылки должны быть вписаны ЕСТЕСТВЕННО в текст, например:
+  "Актуальные предложения можно найти в [каталоге вакансий](https://rabotaify.ru/jobs) на нашей платформе."
+  "Ознакомьтесь с ведущими [IT-компаниями](https://rabotaify.ru/companies), которые сейчас нанимают."
+- НЕ делай отдельную секцию с ссылками — они должны быть органичной частью текста
+
 ### Экранирование:
 - В поле "content" все кавычки внутри текста должны быть экранированы (\\")
 - Переносы строк в content: используй \\n
@@ -569,7 +609,10 @@ def generate_blog_post(api_key, selected_title, model_name="gpt-5.2", site_id='m
     if site_id == 'mfo':
         prompt = get_gpt_prompt_mfo(selected_title)
     else:
-        prompt = get_gpt_prompt_hr(selected_title)
+        # Выбираем случайного автора для HR
+        author = select_hr_author()
+        print(f"✍️ Выбран автор: {author['name']} ({author['role']})")
+        prompt = get_gpt_prompt_hr(selected_title, author['name'])
 
     system_prompt = get_system_prompt(site_id)
 
